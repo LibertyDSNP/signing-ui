@@ -20,7 +20,10 @@
 }
 
 /* Spinner */
-.loader {
+.loader, .isProcessing {
+    --color-accent: #00ccbb;
+    --color-link: #11facc;
+    --color-bg-secondary: #99ffee;
     width: 16px;
     height: 16px;
     border-radius: 50%;

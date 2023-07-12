@@ -1,14 +1,29 @@
-import { getCurrentItemizedHash, getCurrentPaginatedHash } from "./chainActions.js";
-// @ts-ignore
-import { Bytes } from 'https://cdn.jsdelivr.net/npm/@polkadot/types@10.5.1/+esm';
+// For functions that act only on the DOM and don't need any external imports
 let registeredEvents = {};
+export const domActionsSelectors = {
+    connectButton: "connect-button",
+    spinner: "txProcessing",
+    spinnerContainer: "txProcessingContainer",
+    connectionStatus: "connection-status",
+    isProcessing: "isProcessing",
+    requiredFormMissing: "invalid",
+    hiddenClass: "hidden",
+    extrinsicsListId: "extrinsics",
+    signedPayload1Id: "signed_payload",
+    signedPayload2Id: "signed_payload2",
+    extrinsicStatus: "extrinsic-status",
+    otherEndpointSelection: "other-endpoint-value",
+    otherEndpointFieldset: "other-endpoint",
+    otherEndpointURL: "other-endpoint-url",
+    providerList: "provider-list",
+};
 // Simple loading and button blocker
 export function setProgress(id, isInProgress) {
     const spinner = document.getElementById("txProcessing");
     const submitButton = document.getElementById(id);
     const spinnerContainer = document.getElementById('txProcessingContainer');
     if (isInProgress) {
-        document.getElementById('status').innerText = "";
+        document.getElementById(domActionsSelectors.extrinsicStatus).innerText = "";
         submitButton.disabled = true;
         spinner.style.display = "block";
         spinnerContainer.setAttribute("class", "isProcessing");
@@ -19,14 +34,18 @@ export function setProgress(id, isInProgress) {
         spinnerContainer.setAttribute("class", "");
     }
 }
+export function setConnectionProgress(id, isInProgress) {
+    const submitButton = document.getElementById(id);
+    submitButton.disabled = isInProgress;
+}
 export function setVisibility(id, isVisible) {
     let el = document.getElementById(id);
     if (el) {
         if (isVisible) {
-            el.classList.remove('hidden');
+            el.classList.remove(domActionsSelectors.hiddenClass);
         }
         else {
-            !el.classList.contains('hidden') && el.classList.add('hidden');
+            !el.classList.contains(domActionsSelectors.hiddenClass) && el.classList.add('hidden');
         }
     }
 }
@@ -49,10 +68,10 @@ export function showExtrinsicForm(event) {
 }
 export function listenForExtrinsicsChange() {
     // If people are playing around and switching providers, don't keep registering the listener.
-    if (!registeredEvents["extrinsics"]) {
-        let extrinsicsEl = document.getElementById("extrinsics");
+    if (!`registeredEvents`["extrinsics"]) {
+        let extrinsicsEl = document.getElementById(domActionsSelectors.extrinsicsListId);
         extrinsicsEl.addEventListener("change", showExtrinsicForm);
-        let signedPayloadEl = document.getElementById('signed_payload');
+        let signedPayloadEl = document.getElementById(domActionsSelectors.signedPayload1Id);
         signedPayloadEl.value = '';
         registeredEvents["extrinsics"] = true;
     }
@@ -67,8 +86,8 @@ export function getHTMLInputValue(elementId) {
     return document.getElementById(elementId).value;
 }
 export function clearSignedPayloads() {
-    document.getElementById('signed_payload').value = '';
-    document.getElementById('signed_payload2').value = '';
+    document.getElementById(domActionsSelectors.signedPayload1Id).value = '';
+    document.getElementById(domActionsSelectors.signedPayload2Id).value = '';
 }
 export function validateForm(formId) {
     let form = document.getElementById(formId);
@@ -77,8 +96,11 @@ export function validateForm(formId) {
     for (let i = 0; i < inputs.length; i++) {
         let input = inputs[i];
         if (input.required && input.value === '') {
-            input.setAttribute('class', 'invalid');
+            input.classList.add(domActionsSelectors.requiredFormMissing);
             formValid = false;
+        }
+        else {
+            input.classList.remove(domActionsSelectors.requiredFormMissing);
         }
     }
     if (!formValid) {
@@ -90,127 +112,20 @@ export function clearFormInvalid(formId) {
     let form = document.getElementById(formId);
     let inputs = form.getElementsByTagName('input');
     for (let i = 0; i < inputs.length; i++) {
-        inputs[i].setAttribute('class', '');
+        inputs.item(i)?.classList.remove(domActionsSelectors.requiredFormMissing);
     }
-}
-export function getClaimHandleFormData(api) {
-    const signingKey = getSelectedOption('signing-address').value;
-    // TODO: allow to claim handle by other account
-    // const msaOwnerKey = getSelectedOption('claim_handle_msaOwnerKey').value;
-    // const msaOwnerAccount = validAccounts[msaOwnerKey];
-    const handle_vec = new Bytes(api.registry, getHTMLInputValue('claim_handle_handle'));
-    const expiration = parseInt(getHTMLInputValue('claim_handle_expiration'), 10);
-    const rawPayload = { baseHandle: handle_vec, expiration: expiration };
-    const payload = api.registry.createType("CommonPrimitivesHandlesClaimHandlePayload", rawPayload);
-    const signatures = [getHTMLInputValue('signed_payload')];
-    return { signingKey, delegatorKey: "", signatures, payload };
-}
-export function getAddPublicKeyFormData(api) {
-    const signingKey = getSelectedOption('signing-address').value;
-    const delegatorKey = getHTMLInputValue('add_public_key_to_msa_new_key');
-    const expiration = parseInt(getHTMLInputValue('add_public_key_to_msa_expiration'));
-    const signatures = [getHTMLInputValue('signed_payload')];
-    let rawPayload = {
-        msaId: parseInt(getHTMLInputValue('add_public_key_to_msa_msa_id')),
-        expiration: expiration,
-        newPublicKey: delegatorKey,
-    };
-    const payload = api.registry.createType("PalletMsaAddKeyData", rawPayload);
-    return { signingKey, delegatorKey, signatures, payload };
-}
-export function getCreateSponsoredAccountFormData(api) {
-    const signingKey = getSelectedOption('signing-address').value;
-    const delegatorKey = getHTMLInputValue('create_sponsored_account_with_delegation_delegator_key');
-    const authorizedMsaId = parseInt(getHTMLInputValue('create_sponsored_account_with_delegation_provider'));
-    const expiration = parseInt(getHTMLInputValue('create_sponsored_account_with_delegation_expiration'));
-    const schemaIds = getHTMLInputValue('create_sponsored_account_with_delegation_schema_ids')
-        .split(",")
-        .map(item => parseInt(item.trim()));
-    const signatures = [getHTMLInputValue('signed_payload')];
-    const rawPayload = { authorizedMsaId, expiration, schemaIds };
-    const payload = api.registry.createType("PalletMsaAddProvider", rawPayload);
-    return { signingKey, delegatorKey, signatures, payload };
-}
-export function getGrantDelegationFormData(api) {
-    const signingKey = getSelectedOption('signing-address').value;
-    const delegatorKey = getHTMLInputValue('grant_delegation_delegator_key');
-    const authorizedMsaId = parseInt(getHTMLInputValue('grant_delegation_provider'));
-    const expiration = parseInt(getHTMLInputValue('grant_delegation_expiration'));
-    const schemaIds = getHTMLInputValue('grant_delegation_schema_ids')
-        .split(",")
-        .map(item => parseInt(item.trim()));
-    const signatures = [getHTMLInputValue('signed_payload')];
-    const rawPayload = { authorizedMsaId, expiration, schemaIds };
-    const payload = api.registry.createType("PalletMsaAddProvider", rawPayload);
-    return { signingKey, delegatorKey, signatures, payload };
-}
-export async function getApplyItemActionsWithSignatureFormData(api) {
-    const signingKey = getSelectedOption('signing-address').value;
-    const delegatorKey = getHTMLInputValue('apply_item_actions_with_signature_delegator_key');
-    const delegatorMsaId = parseInt(getHTMLInputValue('apply_item_actions_with_signature_delegator_msa'));
-    const itemizedSchemaId = parseInt(getHTMLInputValue('apply_item_actions_with_signature_schema_id'));
-    const firstAction = new Bytes(api.registry, getHTMLInputValue('apply_item_actions_with_signature_actions1'));
-    const secondAction = new Bytes(api.registry, getHTMLInputValue('apply_item_actions_with_signature_actions2'));
-    const expiration = parseInt(getHTMLInputValue('apply_item_actions_with_signature_expiration'));
-    const targetHash = await getCurrentItemizedHash(api, delegatorMsaId, itemizedSchemaId);
-    const addActions = [{ Add: firstAction }, { Add: secondAction }];
-    const rawPayload = {
-        msaId: delegatorMsaId,
-        targetHash: targetHash,
-        schemaId: itemizedSchemaId,
-        actions: addActions,
-        expiration,
-    };
-    const payload = api.registry.createType("PalletStatefulStorageItemizedSignaturePayload", rawPayload);
-    const signatures = [getHTMLInputValue('signed_payload')];
-    return { signingKey, delegatorKey, signatures, payload };
-}
-export async function getUpsertPageFormData(api) {
-    const signingKey = getSelectedOption('signing-address').value;
-    const signatures = [getHTMLInputValue('signed_payload')];
-    const delegatorKey = getHTMLInputValue('upsert_page_with_signature_delegator_key');
-    const msaId = parseInt(getHTMLInputValue('upsert_page_with_signature_msa_id'));
-    const pageId = parseInt(getHTMLInputValue('upsert_page_with_signature_page_id'));
-    const schemaId = parseInt(getHTMLInputValue('upsert_page_with_signature_schema_id'));
-    const expiration = parseInt(getHTMLInputValue('upsert_page_with_signature_expiration'));
-    const pageData = new Bytes(api.registry, getHTMLInputValue('upsert_page_with_signature_page_data'));
-    let targetHash = await getCurrentPaginatedHash(api, msaId, schemaId, pageId);
-    const upsertPayload = {
-        msaId,
-        targetHash,
-        schemaId,
-        pageId,
-        expiration,
-        payload: pageData,
-    };
-    const payload = api.registry.createType("PalletStatefulStoragePaginatedUpsertSignaturePayload", upsertPayload);
-    return { signingKey, delegatorKey, payload, signatures, };
-}
-export async function getDeletePageWithSignatureFormData(api) {
-    const signingKey = getSelectedOption('signing-address').value;
-    const signatures = [getHTMLInputValue('signed_payload')];
-    const delegatorKey = getHTMLInputValue('delete_page_with_signature_delegator_key');
-    const msaId = parseInt(getHTMLInputValue('delete_page_with_signature_msa_id'));
-    const pageId = parseInt(getHTMLInputValue('delete_page_with_signature_page_id'));
-    const schemaId = parseInt(getHTMLInputValue('delete_page_with_signature_schema_id'));
-    const expiration = parseInt(getHTMLInputValue('delete_page_with_signature_expiration'));
-    let targetHash = await getCurrentPaginatedHash(api, msaId, schemaId, pageId);
-    const upsertPayload = {
-        msaId,
-        targetHash,
-        schemaId,
-        pageId,
-        expiration,
-    };
-    const payload = api.registry.createType("PalletStatefulStoragePaginatedUpsertSignaturePayload", upsertPayload);
-    return { signingKey, delegatorKey, payload, signatures };
 }
 export function showExtrinsicStatus(status) {
     let newEl = document.createElement("p");
     newEl.innerText = status;
-    document.getElementById('status').appendChild(newEl);
+    document.getElementById(domActionsSelectors.extrinsicStatus).appendChild(newEl);
 }
 export function onProviderEndpointChanged(_event) {
-    let selectEl = document.getElementById('provider-list');
-    setVisibility('other-endpoint', !!selectEl.selectedOptions.namedItem('other-endpoint-value'));
+    let selectEl = document.getElementById(domActionsSelectors.providerList);
+    let otherIsSelected = selectEl.selectedOptions.namedItem(domActionsSelectors.otherEndpointSelection);
+    setVisibility(domActionsSelectors.otherEndpointFieldset, !!otherIsSelected);
+}
+export function callAndRegisterProviderChangeEvent() {
+    onProviderEndpointChanged(null);
+    document.getElementById(domActionsSelectors.providerList).addEventListener("change", onProviderEndpointChanged);
 }
